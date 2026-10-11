@@ -37,6 +37,15 @@ defmodule DepsNixTest do
              ) == {"sha256-QUwRH9GWMTrG2HsFqiPNNKm+K5+cwPigdtlx9OUNK58=", "buildMix"}
     end
 
+    test "detects the builder in a subdirectory" do
+      assert DepsNix.github_prefetcher(
+               "open-telemetry",
+               "opentelemetry-erlang-contrib",
+               "23065f3039be9574671298742970af9044c46e44",
+               "instrumentation/opentelemetry_cowboy"
+             ) == {"sha256-dseiqaid+od3GfTeExBgc7lDYFe3tAg5Up9HngUQnzg=", "buildRebar3"}
+    end
+
     test "fails for nonsense repos" do
       assert_raise(DepsNix.InvalidGitHubReference, fn ->
         DepsNix.github_prefetcher(

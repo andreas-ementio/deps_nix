@@ -95,7 +95,7 @@ defmodule DepsNix.DerivationTest do
              } =
                Derivation.from(dep, %DepsNix.Options{
                  github_prefetcher: fn
-                   "code-supply", "mudbrick", ^rev ->
+                   "code-supply", "mudbrick", ^rev, nil ->
                      {generated_hash, "buildMix"}
                  end
                })
@@ -111,6 +111,41 @@ defmodule DepsNix.DerivationTest do
                src: %FetchGit{url: ^url, rev: ^rev}
              } = Derivation.from(dep, %DepsNix.Options{})
     end
+  end
+
+  test "builds git dependencies from their sparse and subdir paths" do
+    for {lock_opts, expected} <- [
+          {[], nil},
+          {[tag: "v0.1.0", sparse: "elixir"], "elixir"},
+          {[subdir: "apps/my_lib"], "apps/my_lib"},
+          {[sparse: "packages", subdir: "my_lib", depth: 1], "packages/my_lib"}
+        ] do
+      dep =
+        dep(scm: Mix.SCM.Git, git_url: "https://example.com/repo.git", git_lock_opts: lock_opts)
+
+      assert %Derivation{subdir: ^expected} = Derivation.from(pick(dep), %DepsNix.Options{})
+    end
+  end
+
+  test "detects the builder of GitHub dependencies in their subdirectory" do
+    dep =
+      dep(
+        scm: Mix.SCM.Git,
+        git_url: "https://github.com/open-telemetry/opentelemetry-erlang-contrib.git",
+        git_lock_opts: [sparse: "instrumentation/opentelemetry_cowboy"]
+      )
+      |> pick()
+
+    assert %Derivation{builder: "buildRebar3"} =
+             Derivation.from(dep, %DepsNix.Options{
+               github_prefetcher: fn
+                 "open-telemetry",
+                 "opentelemetry-erlang-contrib",
+                 _rev,
+                 "instrumentation/opentelemetry_cowboy" ->
+                   {"somehash", "buildRebar3"}
+               end
+             })
   end
 
   property "prefers mix over every other builder" do
@@ -385,6 +420,62 @@ defmodule DepsNix.DerivationTest do
                in
                drv;
              """
+    end
+
+    test "git dependencies in a subdirectory unpack to that subdirectory" do
+      assert %Derivation{
+               builder: "buildMix",
+               name: :my_lib,
+               version: "0.1.0",
+               src: %FetchGit{
+                 url: "ssh://git@example.com/me/monorepo.git",
+                 rev: "somehash"
+               },
+               beam_deps: [:jason],
+               app_config_path: "config",
+               subdir: "elixir/my_lib"
+             }
+             |> to_string() == """
+             my_lib =
+               let
+                 version = "0.1.0";
+                 drv = buildMix {
+                   inherit version;
+                   name = "my_lib";
+                   appConfigPath = ./config;
+
+                   src = builtins.fetchGit {
+                     url = "ssh://git@example.com/me/monorepo.git";
+                     rev = "somehash";
+                     allRefs = true;
+                   };
+
+                   beamDeps = [
+                     jason
+                   ];
+
+                   postUnpack = ''
+                     sourceRoot="$sourceRoot/elixir/my_lib"
+                   '';
+                 };
+               in
+               drv;
+             """
+    end
+
+    test "fetch-only git dependencies keep the whole checkout, like Mix's deps dir" do
+      refute %Derivation{
+               builder: "buildMix",
+               name: :heroicons,
+               version: nil,
+               src: %FetchGit{url: "https://example.com/heroicons.git", rev: "somehash"},
+               beam_deps: [],
+               app_config_path: "config",
+               fetch_only: true,
+               subdir: "optimized"
+             }
+             |> to_string()
+             |> String.contains?("sourceRoot")
     end
   end
 end

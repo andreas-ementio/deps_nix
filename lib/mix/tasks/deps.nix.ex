@@ -65,6 +65,9 @@ defmodule Mix.Tasks.Deps.Nix do
   `builtins.fetchGit` is used for non-GitHub projects, which doesn't require
   any prefetching and relies on the git SHA as a unique identifier. However, it
   suffers from [several disadvantages](https://discourse.nixos.org/t/fetchgit-vs-fetchgit/23325).
+
+  Git dependencies using the `:sparse` or `:subdir` options, e.g. a Mix project
+  in a subdirectory of a monorepo, are built from that subdirectory.
   """
 
   @shortdoc "Produce nix derivations for mix dependencies"

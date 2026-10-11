@@ -1093,6 +1093,33 @@ let
         in
         drv;
 
+      opentelemetry_telemetry =
+        let
+          version = "1.1.2";
+          drv = buildMix {
+            inherit version;
+            name = "opentelemetry_telemetry";
+            appConfigPath = ./config;
+
+            src = fetchFromGitHub {
+              owner = "open-telemetry";
+              repo = "opentelemetry-erlang-contrib";
+              rev = "23065f3039be9574671298742970af9044c46e44";
+              hash = "sha256-dseiqaid+od3GfTeExBgc7lDYFe3tAg5Up9HngUQnzg=";
+            };
+
+            beamDeps = [
+              opentelemetry_api
+              telemetry
+            ];
+
+            postUnpack = ''
+              sourceRoot="$sourceRoot/utilities/opentelemetry_telemetry"
+            '';
+          };
+        in
+        drv;
+
       phoenix =
         let
           version = "1.8.5";

@@ -5,7 +5,8 @@ defmodule DepsNix do
   defmodule Options do
     @type t :: %Options{
             envs: map(),
-            github_prefetcher: (String.t(), String.t(), String.t() -> String.t()),
+            github_prefetcher: (String.t(), String.t(), String.t(), String.t() | nil ->
+                                  {String.t(), String.t() | :unknown}),
             output: String.t(),
             app_config: boolean(),
             app_config_path: String.t() | nil,
@@ -73,7 +74,7 @@ defmodule DepsNix do
     |> to_opts()
   end
 
-  def github_prefetcher(owner, repo, rev) do
+  def github_prefetcher(owner, repo, rev, subdir \\ nil) do
     Mix.shell().info("deps_nix: fetching hash for GitHub dependency #{owner}/#{repo}")
 
     with dir <- System.tmp_dir() |> realpath(),
@@ -85,7 +86,7 @@ defmodule DepsNix do
          nar = ExNar.serialize!(path),
          nar_hash = :crypto.hash(:sha256, nar),
          hash = "sha256-" <> Base.encode64(nar_hash) do
-      {hash, find_builder_from_path(path)}
+      {hash, find_builder_from_path(Path.join([path | List.wrap(subdir)]))}
     end
   end
 
@@ -154,7 +155,7 @@ defmodule DepsNix do
     %Options{
       cwd: File.cwd!(),
       envs: %{"prod" => :all},
-      github_prefetcher: &github_prefetcher/3
+      github_prefetcher: &github_prefetcher/4
     }
   end
 

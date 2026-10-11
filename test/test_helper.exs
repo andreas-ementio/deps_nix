@@ -58,6 +58,7 @@ defmodule TestHelpers do
     sub_deps = Keyword.get(opts, :sub_deps, [])
     scm = Keyword.get(opts, :scm)
     dep_opts = Keyword.get(opts, :dep_opts, [])
+    git_lock_opts = Keyword.get(opts, :git_lock_opts, [])
 
     gen all name <- if(name, do: constant(name), else: atom(:alphanumeric)),
             version <- if(version, do: constant(version), else: version()),
@@ -84,7 +85,7 @@ defmodule TestHelpers do
               :git,
               Keyword.get(opts, :git_url, url),
               version,
-              []
+              git_lock_opts
             }
 
           Mix.SCM.Path ->

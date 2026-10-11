@@ -14,7 +14,8 @@ defmodule DepsNix.Derivation do
             | DepsNix.FetchGit.t()
             | DepsNix.FetchHex.t(),
           beam_deps: list(atom()),
-          fetch_only: boolean()
+          fetch_only: boolean(),
+          subdir: String.t() | nil
         }
 
   @enforce_keys [
@@ -32,7 +33,8 @@ defmodule DepsNix.Derivation do
     :version,
     :src,
     :beam_deps,
-    fetch_only: false
+    fetch_only: false,
+    subdir: nil
   ]
 
   def new(dep, opts) do
@@ -49,8 +51,9 @@ defmodule DepsNix.Derivation do
 
   @spec from(Mix.Dep.t(), DepsNix.Options.t()) :: t()
   def from(%Mix.Dep{scm: Mix.SCM.Git} = dep, options) do
-    {:git, url, rev, _} = dep.opts[:lock]
+    {:git, url, rev, lock_opts} = dep.opts[:lock]
     private = !!dep.opts[:private]
+    subdir = git_subdir(lock_opts)
 
     case parse_git_url(url, private) do
       [owner: owner, repo: repo] ->
@@ -58,7 +61,7 @@ defmodule DepsNix.Derivation do
 
         {hash, builder} =
           if prefetcher do
-            prefetcher.(owner, repo, rev)
+            prefetcher.(owner, repo, rev, subdir)
           else
             {"", "buildMix"}
           end
@@ -74,6 +77,7 @@ defmodule DepsNix.Derivation do
           version: dep.opts[:app_properties][:vsn],
           src: fetcher,
           builder: builder,
+          subdir: subdir,
           app_config_path: app_config_path(options)
         )
 
@@ -84,6 +88,7 @@ defmodule DepsNix.Derivation do
           version: dep.opts[:app_properties][:vsn],
           src: fetcher,
           builder: "buildMix",
+          subdir: subdir,
           app_config_path: app_config_path(options)
         )
     end
@@ -116,6 +121,14 @@ defmodule DepsNix.Derivation do
       builder: nix_builder(beam_builders),
       app_config_path: app_config_path(options)
     )
+  end
+
+  # Like Mix, build from <checkout>/<sparse>/<subdir>.
+  defp git_subdir(lock_opts) do
+    case Enum.reject([lock_opts[:sparse], lock_opts[:subdir]], &is_nil/1) do
+      [] -> nil
+      parts -> Elixir.Path.join(parts)
+    end
   end
 
   defp nix_builder(builders) do
@@ -291,6 +304,21 @@ defmodule DepsNix.Derivation do
       postUnpack = ''
         test -e /tmp/unicode-data ||
           ln -sfv ${unicode.src}/data /tmp/unicode-data
+      '';\
+      """
+      |> Util.indent(from: 2)
+      |> Util.indent(from: 2)
+      |> Util.indent(from: 2)
+    end
+
+    # sourceRoot can't be set as an attribute: the unpacked dir name depends on
+    # nixpkgs' fetchedSourceNameDefault.
+    defp post_unpack(%DepsNix.Derivation{subdir: subdir}) when is_binary(subdir) do
+      """
+
+
+      postUnpack = ''
+        sourceRoot="$sourceRoot/#{subdir}"
       '';\
       """
       |> Util.indent(from: 2)
